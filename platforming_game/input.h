@@ -5,6 +5,7 @@
 
 struct key {
 	bool pressed{ false };
+	bool released{ false };
 	double pressed_time{ 0.0 };
 	double last_duration{ 0.0 };
 
@@ -26,6 +27,10 @@ public:
 	}
 
 	void check_input() {
+		for (auto& k : keys) {
+			k.released = false;
+		}
+
 		while (SDL_PollEvent(&keyboard_event)) {
 
 			if (keyboard_event.type == SDL_EVENT_QUIT) {
@@ -38,8 +43,7 @@ public:
 				if (!keys[key_code].pressed) {
 					//if the key was not pressed, set it's state as pressed
 					keys[key_code].pressed = true;
-					keys[key_code].pressed_time = SDL_GetTicks();
-					keys[key_code].last_duration = 0.0;
+					keys[key_code].pressed_time = static_cast<double>(SDL_GetTicks());
 				}
 
 				//if the key as an assigned action, execute it when the key is pressed
@@ -47,13 +51,15 @@ public:
 					keys[key_code].action();
 				}
 			}
-
+			
 			if (keyboard_event.type == SDL_EVENT_KEY_UP) {
 				//set key state as not pressed and compute total pressed time
 				unsigned int key_code = keyboard_event.key.scancode;
 
 				keys[key_code].pressed = false;
+				keys[key_code].released = true;
 				keys[key_code].last_duration = SDL_GetTicks() - keys[key_code].pressed_time;
+
 			}
 		}
 	}
@@ -78,6 +84,10 @@ public:
 
 	bool is_key_pressed(unsigned int scancode) {
 		return keys[scancode].pressed;
+	}
+
+	bool is_key_released(unsigned int scancode) {
+		return keys[scancode].released;
 	}
 
 private:

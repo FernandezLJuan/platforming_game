@@ -38,14 +38,15 @@ void Game::init() {
 
 	auto* player_movement = em.get_component<components::movement>(player_id);
 	player_movement->speed = { 0.0,0.0 };
-	player_movement->acceleration = { 2.0f,2.0f };
+	player_movement->acceleration = { 2.0f,4.0f };
 	
-	player_movement->max_speed = { 200.0,200.0 };
+	player_movement->max_speed = { 200.0,300.0 };
 	player_movement->max_acceleration = { 5.0,5.0 };
 
 	auto* player_sprite = em.get_component<components::render>(player_id);
 	player_sprite->sprite_rect = { static_cast<float>(player_position->pos.x), static_cast<float>(player_position->pos.y), 50,50 };
 	player_sprite->original_width = 50;
+	player_sprite->render_color = { 0x00,0xFF,0x00,0xFF };
 
 	auto* player_collision = em.get_component<components::collision>(player_id);
 	player_collision->hitbox.x = player_position->pos.x;
@@ -71,11 +72,14 @@ void Game::init() {
 	enemy_movement->max_speed = { 100.0,100.0 };
 	enemy_movement->max_acceleration = { 5.0,5.0 };
 
+	auto* enemy_render = em.get_component<components::render>(enemy_id);
+	enemy_render->sprite_rect = { static_cast<float>(enemy_position->pos.x), static_cast<float>(enemy_position->pos.y), 30, 30 };
+
 	auto* enemy_collision = em.get_component<components::collision>(enemy_id);
 	enemy_collision->hitbox.x = enemy_position->pos.x;
 	enemy_collision->hitbox.y = enemy_position->pos.y;
-	enemy_collision->hitbox.w = 10;
-	enemy_collision->hitbox.h = 10;
+	enemy_collision->hitbox.w = enemy_render->sprite_rect.w;
+	enemy_collision->hitbox.h = enemy_render->sprite_rect.h;
 
 	//ground doesn't need movement or input components, only collisions and renders
 	unsigned long long ground_id = em.new_entity();
@@ -90,6 +94,7 @@ void Game::init() {
 	auto* ground_render = em.get_component<components::render>(ground_id);
 	ground_render->sprite_rect = { static_cast<float>(ground_position->pos.x), static_cast<float>(ground_position->pos.y), 1900,400};
 	ground_render->original_width = 1900;
+	ground_render->render_color = {0x00,0x00,0xFF,0xFF};
 
 	auto* ground_collision = em.get_component<components::collision>(ground_id);
 	ground_collision->hitbox = ground_render->sprite_rect;
@@ -103,7 +108,7 @@ void Game::cleanup() {
 
 	SDL_DestroyWindow(window);
 	window = nullptr;
-
+	 
 	SDL_Quit();
 }
 
@@ -120,7 +125,7 @@ void Game::run() {
 		
 		handle_input();
 
-		if(!paused)
+		if(!paused) 
 			update(delta_time);
 
 		render();
@@ -150,11 +155,12 @@ void Game::render() {
 		if (e.mask.test(components::get_id<components::render>())) {
 			auto* entity_sprite = em.get_component<components::render>(e.id);
 			auto* entity_position = em.get_component<components::position>(e.id);
+			SDL_Color render_color = entity_sprite->render_color;
 
 			entity_sprite->sprite_rect.x = entity_position->pos.x;
 			entity_sprite->sprite_rect.y = entity_position->pos.y;
 
-			SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
+			SDL_SetRenderDrawColor(renderer, render_color.r, render_color.b, render_color.g, render_color.a);
 			SDL_RenderRect(renderer, &entity_sprite->sprite_rect);
 		}
 	}

@@ -13,8 +13,13 @@ namespace types {
     };
 }
 
+enum class collision_types {
+    RIGID_BODY,
+    DAMAGE
+};
+
 namespace components {
-    extern int component_counter; // Declaration
+    extern int component_counter;
 
     template<class T>
     int get_id() {
@@ -23,7 +28,7 @@ namespace components {
     }
 
     struct health {
-        static int id; // Declaration
+        static int id;
         const int max_health;
         const int current_health;
 
@@ -49,6 +54,7 @@ namespace components {
         static int id; // Declaration
         SDL_FRect sprite_rect{ 0,0,10,10 };
         int original_width = 10;
+        SDL_Color render_color = { 0xFF,0x00,0x00,0xFF };
     };
 
     struct physics {
@@ -56,14 +62,18 @@ namespace components {
         double x_forces = 0.0; //sum of all forces acting in the x axis 
         double y_forces = 0.0; //sum of all forces acting in the y axis (normal force, gravity, etc.)
         double mass; //mass of an entity, entities with 0 mass will not be affected by gravity (obviously)
-        const double friction = 0.3; //friction coefficient, determines how much speed is reduced by friction with a surface
+        double friction = 0.3; //friction coefficient, determines how much speed is reduced by friction with a surface
     };
 
     struct gravity {
         static int id;
-        double falling_strength = 200.0f;
-        double jump_strength = -200.0f;
+        double gravity_constant = 9.8;
+    };
+    
+    struct jump {
+        static int id;
         bool is_grounded = false;
+        double jump_force = -200.0;
     };
 
     struct input {
@@ -77,6 +87,7 @@ namespace components {
     struct collision {
         static int id;
         SDL_FRect hitbox;
+        collision_types collision_nature = collision_types::RIGID_BODY;
     };
 }
 

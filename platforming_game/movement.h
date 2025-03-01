@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 #include "input.h"
 #include "entity.h"
 
@@ -21,10 +22,10 @@ private:
 
 class Collision_System {
 public:
-    enum collision_types { NO_COLLISION, TOP_COLLISION, BOTTOM_COLLISION, LEFT_COLLISION, RIGHT_COLLISION };
+    enum collision_direction { NO_COLLISION, TOP_COLLISION, BOTTOM_COLLISION, LEFT_COLLISION, RIGHT_COLLISION };
 
 	Collision_System(entity_manager&);
-	collision_types detect_collision(entity&, entity&);
+	collision_direction detect_collision(entity&, entity&);
 
 private:
     entity_manager& em;
