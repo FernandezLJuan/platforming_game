@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <bitset>
+#include <iostream>
 #include <vector>
 
 #define MAX_COMPONENTS 32
@@ -29,15 +30,41 @@ namespace components {
 
     struct health {
         static int id;
-        const int max_health;
-        const int current_health;
+        int max_health = 100;
+        int current_health = 100;
+        int i_frames = 0; //invinciblity frames after receiving damage
+    };
 
-        health(int max, int current) : max_health(max), current_health(current) {}
+    struct damage {
+        static int id;
+        int damage_amount;
+    };
+
+    struct pending_damage {
+        static int id;
+        int pending_amount = 0;
+    };
+
+    struct regeneration{
+        static int id;
+        int regen_amount = 0;
+    };
+
+    struct thorns {
+        static int id;
+        int damage;
+    };
+
+    struct invincibility {
+        static int id;
+        double max_duration = 0.0;
+        double remaining_time = 0.0;
     };
 
     struct position {
         static int id; // Declaration
         types::Vec2<double> pos{ 0,0 };
+        bool is_grounded = false;
     };
 
     struct movement {
@@ -47,7 +74,7 @@ namespace components {
         types::Vec2<double> max_speed{ 0,0 };
         types::Vec2<double> max_acceleration{ 0,0 };
 
-        types::Vec2<double> deceleration{ 70.0,70.0 };
+        types::Vec2<double> deceleration{ 10.0,10.0 };
     };
 
     struct render {
@@ -62,20 +89,19 @@ namespace components {
         double x_forces = 0.0; //sum of all forces acting in the x axis 
         double y_forces = 0.0; //sum of all forces acting in the y axis (normal force, gravity, etc.)
         double mass; //mass of an entity, entities with 0 mass will not be affected by gravity (obviously)
-        double friction = 0.3; //friction coefficient, determines how much speed is reduced by friction with a surface
+        const double friction = 0.3; //friction coefficient, determines how much speed is reduced by friction with a surface
     };
 
     struct gravity {
         static int id;
-        double gravity_constant = 9.8;
+        double falling_strength = 200.0;
     };
     
     struct jump {
         static int id;
-        bool is_grounded = false;
-        double jump_force = -200.0;
+        double jump_strength = -30.0;
     };
-
+    
     struct input {
         static int id;
         unsigned int move_left = SDL_SCANCODE_A;
@@ -87,7 +113,7 @@ namespace components {
     struct collision {
         static int id;
         SDL_FRect hitbox;
-        collision_types collision_nature = collision_types::RIGID_BODY;
+        bool is_rigid = false;
     };
 }
 
@@ -117,8 +143,33 @@ struct entity_manager {
     entity_manager() {}
 
     unsigned long long new_entity() {
+        if (!free_ids.empty()) {
+            unsigned long long id = free_ids.back();
+            free_ids.pop_back();
+            entities[id].mask.reset(); //reset the component mask for the reused entity
+            return id;
+        }
         entities.push_back(entity{ entities.size(), std::bitset<MAX_COMPONENTS>() });
         return entities.back().id;
+    }
+
+    void delete_entity(unsigned long long id) {
+        if (id >= entities.size() || !entities[id].mask.any()) {
+            return; //entity already deleted or invalid
+        }
+
+        //remove all components associated with the entity
+        for (size_t i = 0; i < MAX_COMPONENTS; ++i) {
+            if (entities[id].mask.test(i)) {
+                //optionally call destructors for components if needed
+                entities[id].mask.reset(i);
+            }
+        }
+
+        //mark the entity as free for reuse
+        free_ids.push_back(id);
+
+        std::cout << "Deleted entity: " << id << "\n";
     }
 
     template<class T>
@@ -154,4 +205,5 @@ struct entity_manager {
 
     std::vector<entity> entities;
     std::vector<component_pool*> components_pool;
+    std::vector<unsigned long long> free_ids; // List of free entity IDs for reuse
 };

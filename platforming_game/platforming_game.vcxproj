@@ -144,12 +144,14 @@
   <ItemGroup>
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="game.cpp" />
+    <ClCompile Include="health.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="movement.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="entity.h" />
     <ClInclude Include="game.h" />
+    <ClInclude Include="health_system.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="movement.h" />
   </ItemGroup>

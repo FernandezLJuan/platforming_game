@@ -1,16 +1,10 @@
 #include "movement.h"
 
-Movement_System::Movement_System(entity_manager& em, Input_Handler& input, Collision_System& collision_system) : em(em), input(input), collision_sys(collision_system){}
+Movement_System::Movement_System(entity_manager& em, Input_Handler& input, Collision_System& collision_system) : em(em), input(input){}
 
 Collision_System::Collision_System(entity_manager& em) : em(em) {}
 
 void Movement_System::update(double delta_time) {
-    const float MAX_JUMP_HOLD_TIME = 3.0f;
-    const float MIN_JUMP_STRENGTH = -20.0f;
-
-    // Delayed jump flag
-    static bool delayed_jump = false;
-    static unsigned int delayed_jump_key = 0;
 
     for (auto& e : em.entities) {
         if (e.mask.test(components::get_id<components::movement>())) {
@@ -20,13 +14,10 @@ void Movement_System::update(double delta_time) {
             // Apply gravity
             if (e.mask.test(components::get_id<components::gravity>())) {
                 auto* gravity_component = em.get_component<components::gravity>(e.id);
-
-                if (!gravity_component->is_grounded) {
-                    movement->speed.y += gravity_component->falling_strength * delta_time;
-                }
+                movement->speed.y += gravity_component->falling_strength * delta_time;
             }
 
-            //handle input (after collision detection)
+            // Handle input (after collision detection)
             if (e.mask.test(components::get_id<components::input>())) {
                 auto* key_binds = em.get_component<components::input>(e.id);
 
@@ -34,108 +25,69 @@ void Movement_System::update(double delta_time) {
                     double key_press_duration = input.key_time(SDL_SCANCODE_A);
                     movement->speed.x -= movement->acceleration.x * key_press_duration * delta_time;
                 }
-                else if (movement->speed.x < 0) {
-                    movement->speed.x += movement->deceleration.x * delta_time;
-                }
 
                 if (input.is_key_pressed(key_binds->move_right)) {
                     double key_press_duration = input.key_time(SDL_SCANCODE_D);
                     movement->speed.x += movement->acceleration.x * key_press_duration * delta_time;
                 }
-                else if (movement->speed.x > 0) {
-                    movement->speed.x -= movement->deceleration.x * delta_time;
+
+                if (!input.is_key_pressed(key_binds->move_left) && !input.is_key_pressed(key_binds->move_right)) {
+                    if (std::abs(movement->speed.x) < 0.01) {
+                        movement->speed.x = 0;  // Detener completamente si es muy baja
+                    }
+                    else if (movement->speed.x > 0) {
+                        movement->speed.x -= movement->deceleration.x * delta_time;
+                        if (movement->speed.x < 0) movement->speed.x = 0;  // Evita moverse en reversa
+                    }
+                    else if (movement->speed.x < 0) {
+                        movement->speed.x += movement->deceleration.x * delta_time;
+                        if (movement->speed.x > 0) movement->speed.x = 0;  // Evita moverse en reversa
+                    }
                 }
+
 
                 if (std::abs(movement->speed.x) > movement->max_speed.x) {
                     float sign = std::signbit(movement->speed.x) ? -1.0f : 1.0f;
                     movement->speed.x = movement->max_speed.x * sign;
                 }
 
-                if (e.mask.test(components::get_id<components::gravity>())) {
-                    auto* gravity_component = em.get_component<components::gravity>(e.id);
+                if (e.mask.test(components::get_id<components::jump>())) {
+                    auto* jump_component = em.get_component<components::jump>(e.id);
 
-                    if (input.is_key_pressed(key_binds->jump) && gravity_component->is_grounded) {
-                        movement->speed.y = gravity_component->jump_strength;
+                    if (input.is_key_pressed(key_binds->jump) && position->is_grounded) {
+                        movement->speed.y = jump_component->jump_strength;
+                        position->is_grounded = false;
                     }
 
-                    if (input.is_key_released(key_binds->jump) && !gravity_component->is_grounded) {
+                    if (input.is_key_released(key_binds->jump) && !position->is_grounded) {
                         movement->speed.y *= 0.5;
                     }
                 }
             }
 
-            //calculate new position
-            float new_x = position->pos.x + movement->speed.x * delta_time;
-            float new_y = position->pos.y + movement->speed.y * delta_time;
+            if (std::abs(movement->speed.y) > movement->max_speed.y) {
+                float sign = std::signbit(movement->speed.y) ? -1.0f : 1.0f;
+                movement->speed.y = movement->max_speed.x * sign;
+            }
 
-            //check for collisions with other entities
+            //apply the final position
+            position->pos.x += movement->speed.x;
+            position->pos.y += movement->speed.y;
+
             if (e.mask.test(components::get_id<components::collision>())) {
                 auto* collision_component = em.get_component<components::collision>(e.id);
 
-                //reset is_grounded at the start of the collision check
-                if (e.mask.test(components::get_id<components::gravity>())) {
-                    auto* gravity_component = em.get_component<components::gravity>(e.id);
-                    gravity_component->is_grounded = false; // Assume not grounded unless a bottom collision is detected
-                }
-
-                //temporarily update the hitbox to the new position
-                collision_component->hitbox.x = new_x;
-                collision_component->hitbox.y = new_y;
-
-                //check for collisions with all other entities
-                for (auto& other_entity : em.entities) {
-                    if (&e != &other_entity && other_entity.mask.test(components::get_id<components::collision>())) {
-                        auto collision_type = collision_sys.detect_collision(e, other_entity);
-
-                        if (collision_type != Collision_System::collision_direction::NO_COLLISION) {
-                            // Handle collision
-                            switch (collision_type) {
-                            case Collision_System::collision_direction::TOP_COLLISION:
-                                new_y = em.get_component<components::collision>(other_entity.id)->hitbox.y - collision_component->hitbox.h;
-                                movement->speed.y = 0.0f; // Stop vertical movement
-                                break;
-
-                            case Collision_System::collision_direction::BOTTOM_COLLISION:
-                                new_y = em.get_component<components::collision>(other_entity.id)->hitbox.y - collision_component->hitbox.h;
-                                movement->speed.y = 0.0f; // Stop vertical movement
-
-                                // Set grounded flag if the entity has a gravity component
-                                if (e.mask.test(components::get_id<components::gravity>())) {
-                                    auto* gravity_component = em.get_component<components::gravity>(e.id);
-                                    gravity_component->is_grounded = true;
-
-                                }
-                                break;
-
-                            case Collision_System::collision_direction::LEFT_COLLISION:
-                                new_x = em.get_component<components::collision>(other_entity.id)->hitbox.x - collision_component->hitbox.w;
-                                movement->speed.x = 0.0f; // Stop horizontal movement
-                                break;
-
-                            case Collision_System::collision_direction::RIGHT_COLLISION:
-                                new_x = em.get_component<components::collision>(other_entity.id)->hitbox.x + em.get_component<components::collision>(other_entity.id)->hitbox.w;
-                                movement->speed.x = 0.0f; // Stop horizontal movement
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Update the hitbox to the final position
-                collision_component->hitbox.x = new_x;
-                collision_component->hitbox.y = new_y;
+                collision_component->hitbox.x = position->pos.x;
+                collision_component->hitbox.y = position->pos.y;
             }
-
-            // Apply the final position
-            position->pos.x = new_x;
-            position->pos.y = new_y;
-
-            
         }
     }
 }
 
 Collision_System::collision_direction Collision_System::detect_collision(entity& e1, entity& e2) {
+
+    collision_direction direction = collision_direction::NO_COLLISION;
+
     auto* collision_component_1 = em.get_component<components::collision>(e1.id);
     auto* collision_component_2 = em.get_component<components::collision>(e2.id);
 
@@ -163,17 +115,113 @@ Collision_System::collision_direction Collision_System::detect_collision(entity&
     float minOverlap = std::min({ overlapLeft, overlapRight, overlapTop, overlapBottom });
 
     if (minOverlap == overlapTop) {
-        return collision_direction::TOP_COLLISION;
+        direction = collision_direction::TOP_COLLISION;
     }
     else if (minOverlap == overlapBottom) {
-        return collision_direction::BOTTOM_COLLISION;
+        direction = collision_direction::BOTTOM_COLLISION;
     }
     else if (minOverlap == overlapLeft) {
-        return collision_direction::LEFT_COLLISION;
+        direction = collision_direction::LEFT_COLLISION;
     }
     else if (minOverlap == overlapRight) {
-        return collision_direction::RIGHT_COLLISION;
+        direction = collision_direction::RIGHT_COLLISION;
     }
 
-    return collision_direction::NO_COLLISION;
+    resolve_collision(e1, e2, direction);
+
+    return direction;
+}
+
+void Collision_System::resolve_collision(entity& e1, entity& e2, collision_direction direction) {
+
+    auto* e1_collision = em.get_component<components::collision>(e1.id);
+    auto* e2_collision = em.get_component<components::collision>(e2.id);
+
+    //resolve rigid body collisions
+    if (e1_collision->is_rigid || e2_collision->is_rigid) {
+        resolve_rigid_collision(e1, e2, direction);
+    }
+
+    //resolve health-damage interactions
+    resolve_health_damage(e1, e2);
+}
+
+void Collision_System::resolve_rigid_collision(entity& e1, entity& e2, collision_direction direction) {
+    auto* e1_movement = em.get_component<components::movement>(e1.id);
+    auto* e2_movement = em.get_component<components::movement>(e2.id);
+
+    // Ensure neither entity is moved if it does not have a movement component
+    if (!e1_movement && !e2_movement) return;
+
+    auto* e1_position = em.get_component<components::position>(e1.id);
+    auto* e2_position = em.get_component<components::position>(e2.id);
+
+    auto& e1_hitbox = em.get_component<components::collision>(e1.id)->hitbox;
+    auto& e2_hitbox = em.get_component<components::collision>(e2.id)->hitbox;
+
+    float x = 0;
+
+    switch (direction) {
+    case collision_direction::BOTTOM_COLLISION:
+        if (e1_position) e1_position->is_grounded = true;
+        if (e1_movement) e1_movement->speed.y = 0.0;
+
+        x = (e1_hitbox.y + e1_hitbox.h) - e2_hitbox.y;
+
+        // Move only if the entity has movement component
+        if (e1_movement) e1_position->pos.y -= x;
+        if (e2_movement && e2_position) e2_position->pos.y += x / 2.0f;
+        break;
+
+    case collision_direction::TOP_COLLISION:
+        if (e1_movement) e1_movement->speed.y = 0.0;
+
+        x = (e2_hitbox.y + e2_hitbox.h) - e1_hitbox.y;
+
+        if (e1_movement) e1_position->pos.y += x;
+        if (e2_movement && e2_position) e2_position->pos.y -= x / 2.0f;
+        break;
+
+    case collision_direction::LEFT_COLLISION:
+        if (e1_movement) e1_movement->speed.x = 0.0;
+
+        x = (e1_hitbox.x + e1_hitbox.w) - e2_hitbox.x;
+
+        if (e1_movement) e1_position->pos.x -= x;
+        if (e2_movement && e2_position) e2_position->pos.x += x / 2.0f;
+        break;
+
+    case collision_direction::RIGHT_COLLISION:
+        if (e1_movement) e1_movement->speed.x = 0.0;
+
+        x = (e2_hitbox.x + e2_hitbox.w) - e1_hitbox.x;
+
+        if (e1_movement) e1_position->pos.x += x;
+        if (e2_movement && e2_position) e2_position->pos.x -= x / 2.0f;
+        break;
+    }
+
+    // Update hitboxes only for entities that actually moved
+    if (e1_position) {
+        e1_hitbox.x = e1_position->pos.x;
+        e1_hitbox.y = e1_position->pos.y;
+    }
+    if (e2_position && e2_movement) {
+        e2_hitbox.x = e2_position->pos.x;
+        e2_hitbox.y = e2_position->pos.y;
+    }
+}
+
+void Collision_System::resolve_health_damage(entity& e1, entity& e2) {
+
+    if (e1.mask.test(components::get_id<components::health>()) &&
+        e2.mask.test(components::get_id<components::damage>())) {
+        auto* e1_health = em.get_component<components::health>(e1.id);
+        auto* e2_damage = em.get_component<components::damage>(e2.id);
+
+        em.assign_component<components::pending_damage>(e1.id);
+        auto* pending_damage = em.get_component<components::pending_damage>(e1.id);
+
+        pending_damage->pending_amount += e2_damage->damage_amount;
+    }
 }

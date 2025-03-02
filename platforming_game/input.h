@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <functional>
 #include <array>
+#include "entity.h"
 
 struct key {
 	bool pressed{ false };

@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL3/SDL.h>
 #include <iostream>
+#include "health_system.h"
 #include "movement.h"
 #include "input.h"
 
@@ -20,6 +21,9 @@ private:
 	void update(double);
 	void render();
 
+	void create_player();
+	void create_enemy();
+
 	bool is_running;
 	bool paused;
 
@@ -31,5 +35,6 @@ private:
 
 	Movement_System movement_system;
 	Collision_System collision;
+	Health_System health_system;
 	//Render_System render_system;
 };
